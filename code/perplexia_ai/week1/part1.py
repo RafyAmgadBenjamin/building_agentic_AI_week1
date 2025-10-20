@@ -22,6 +22,7 @@ class QuestionState(TypedDict):
     question: str
     category: str
     response: str
+    history: List[Dict[str, str]]
 
 
 class QueryUnderstandingChat(ChatInterface):
@@ -87,9 +88,21 @@ class QueryUnderstandingChat(ChatInterface):
         Returns:
             str: The assistant's response
         """
+        history = self.__process_history_message(chat_history, message)
         # TODO: Students implement query understanding using LangGraph
-        result = self.ready_graph.invoke({'question': message})
+        result = self.ready_graph.invoke({'question': message, 'history': history})
         return result['response']
+
+    def __process_history_message(self, chat_history: List[Dict[str, str]], message: str) -> List[Dict[str, str]]:
+        """Process chat history into the format required by LangChain LLMs."""
+        history = []
+        if chat_history:
+            for msg in chat_history:
+                if msg["role"] in ["user", "assistant"]:
+                    history.append((msg["role"], msg["content"]))
+        # Step 2: Add the new user message
+        history.append(("user", message))
+        return history
 
     def __classifier_llm(self, state: QuestionState) -> str:
         """Classify the type of question using an LLM.
@@ -115,9 +128,9 @@ class QueryUnderstandingChat(ChatInterface):
         print("Generating factual response for question:", state['question'])
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a professional assistant who provides direct and concise factual answers."),
-            ("user", "Question: {question}\nCategory: Factual\nProvide a well-formatted response based on the category.")
+            *state['history']  # This unpacks the history as (role, content) tuples
         ])
-        messages = prompt.format_messages(question=state['question'])
+        messages = prompt.format_messages()
         response = self.llm_factual.invoke(messages)
         state['response'] = response.content.strip()
         return state
@@ -127,9 +140,9 @@ class QueryUnderstandingChat(ChatInterface):
         print("Generating analytical response for question:", state['question'])
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a professional assistant who provides in-depth analytical answers including reasoning steps."),
-            ("user", "Question: {question}\nCategory: Analytical\nProvide a well-formatted response based on the category.")
+            *state['history']  # This unpacks the history as (role, content) tuples
         ])
-        messages = prompt.format_messages(question=state['question'])
+        messages = prompt.format_messages()
         response = self.llm_analytical.invoke(messages)
         state['response'] = response.content.strip()
         return state
@@ -139,9 +152,9 @@ class QueryUnderstandingChat(ChatInterface):
         print("Generating comparisons response for question:", state['question'])
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a professional assistant who provides structured formats(tables, bullet points)."),
-            ("user", "Question: {question}\nCategory: Comparisons\nProvide a well-formatted response based on the category.")
+            *state['history']  # This unpacks the history as (role, content) tuples
         ])
-        messages = prompt.format_messages(question=state['question'])
+        messages = prompt.format_messages()
         response = self.llm_comparisons.invoke(messages)
         state['response'] = response.content.strip()
         return state
@@ -151,9 +164,9 @@ class QueryUnderstandingChat(ChatInterface):
         print("Generating definitions response for question:", state['question'])
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a professional assistant who provides precise definitions including examples and use cases."),
-            ("user", "Question: {question}\nCategory: Definitions\nProvide a well-formatted response based on the category.")
+            *state['history']  # This unpacks the history as (role, content) tuples
         ])
-        messages = prompt.format_messages(question=state['question'])
+        messages = prompt.format_messages()
         response = self.llm_definitions.invoke(messages)
         state['response'] = response.content.strip()
         return state
@@ -164,7 +177,7 @@ class QueryUnderstandingChat(ChatInterface):
         
         # Invoke the agent - it will automatically execute tools
         result = self.calculation_agent.invoke({
-            "messages": [("user", state['question'])]
+                "messages": state['history']  # Pass the full history here
         })
         
         # Extract the final response from the messages
