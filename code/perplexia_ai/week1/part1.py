@@ -4,8 +4,10 @@ This implementation focuses on:
 - Classify different types of questions
 - Format responses based on query type using conditional edges
 - Present information professionally
+
 """
 
+import os
 from typing import Dict, List, Optional, TypedDict
 
 from perplexia_ai.core.chat_interface import ChatInterface
@@ -39,15 +41,26 @@ class QueryUnderstandingChat(ChatInterface):
         """
         # TODO: Students implement initialization
         # Initialize the classifier LLM (no tools needed for classification)
-        self.llm_classifier = init_chat_model(model="gpt-4o-mini")
-
-        self.llm_factual = init_chat_model(model="gpt-4o-mini")
-        self.llm_analytical = init_chat_model(model="gpt-4o-mini")
-        self.llm_comparisons = init_chat_model(model="gpt-4o-mini")
-        self.llm_definitions = init_chat_model(model="gpt-4o-mini")
-        # Bind the calculator tool to the calculation LLM
+        model_kwargs = {"model": "gpt-4o-mini"}
         
-        llm_calculation = init_chat_model(model="gpt-4o-mini")
+        # Get environment variables at runtime
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        openai_api_base = os.getenv("OPENAI_API_BASE")
+        
+        if openai_api_key:
+            model_kwargs["api_key"] = openai_api_key
+        if openai_api_base:
+            model_kwargs["base_url"] = openai_api_base
+            
+        self.llm_classifier = init_chat_model(**model_kwargs)
+
+        self.llm_factual = init_chat_model(**model_kwargs)
+        self.llm_analytical = init_chat_model(**model_kwargs)
+        self.llm_comparisons = init_chat_model(**model_kwargs)
+        self.llm_definitions = init_chat_model(**model_kwargs)
+        # Bind the calculator tool to the calculation LLM
+
+        llm_calculation = init_chat_model(**model_kwargs)
         self.calculation_agent = create_react_agent(
             llm_calculation,
             [self._get_calculator_tool()]
